@@ -18,7 +18,8 @@ if($#ARGV < 0 or $ARGV[0] eq "--help") {
 my $dbfile = $ARGV[0];
 die("ERROR: Database $dbfile already exists. Will not overwrite.\n")
 								if(-f $dbfile);
-my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "");
+my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "",
+						{ sqlite_unicode => 1 });
 # This schema is entirely non-normalized for the purpose of being super easy
 # to process and to aid editing the database directly.
 # PRIMARY KEY implies AUTOINCREMENT here.
