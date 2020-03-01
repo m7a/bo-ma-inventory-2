@@ -9,6 +9,8 @@ use autodie;
 require DBI;       # libdbd-sqlite3-perl
 require Text::CSV; # libtext-csv-perl
 
+#use Data::Dumper 'Dumper'; # debug only
+
 if($#ARGV < 0 or $ARGV[0] eq "--help") {
 	print "USAGE ma_inventory_init DBFILE [CSVFILE]\n";
 	exit(0);
@@ -24,7 +26,7 @@ my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "");
 $dbh->do(<<~EOF);
 	CREATE TABLE inventory (
 		id_internal INTEGER      PRIMARY KEY,
-		id_string   VARCHAR(128) UNIQUE,,
+		id_string   VARCHAR(128) UNIQUE,
 		quantity    INT          NOT NULL,
 		checked     DATETIME,
 		class       VARCHAR(128),
@@ -39,18 +41,17 @@ $dbh->do(<<~EOF);
 	EOF
 
 if($#ARGV eq 1) { # parameter CSVFILE is present
-	my $stmt = $dbh->prepare(<<~EOF);
-		INSERT INTO inventory
-			(id_string, quantity, checked, class, thing, name,
-			location, t0, origin, importance, comments)
-		VALUES
-			(:id_string, :quantity, NULL, :class, :thing, :name,
-			:location, :t0, :origin, :importance, :comments);
-		EOF
-
+	# we first read all data into RAM and only later commit them for
+	# enhanced performance.
 	my $csv = Text::CSV->new({sep_char => ";", quote_char => undef});
 	open(my $fh, "<:encoding(UTF-8)", $ARGV[1]);
 	my $linenumber = 0;
+	my %parameter_arrays = (
+		id_string  => [], quantity   => [], class      => [],
+		thing      => [], name       => [], location   => [],
+		t0         => [], origin     => [], importance => [],
+		comments   => []
+	);
 	while(my $line = <$fh>) {
 		die("ERROR: Failed to parse line [$line]\n")
 						if(not $csv->parse($line));
@@ -75,32 +76,47 @@ if($#ARGV eq 1) { # parameter CSVFILE is present
 			# [12]  Location    [13]  T0        [14]  Origin
 			# [15]  Importance  [16]  Comments
 
-			$stmt->bind_param(":id_string", $fields[0]);
-			$stmt->bind_param(":quantity",  $fields[1]);
-
-			$stmt->bind_param(":class", defined($fields[9])?
+			push @{$parameter_arrays{id_string}}, $fields[0];
+			push @{$parameter_arrays{quantity}}, int($fields[1]);
+			push @{$parameter_arrays{class}}, defined($fields[9])?
 					$fields[9]:
-					($fields[2] eq "Book"? "Book": undef));
-			
-			$stmt->bind_param(":thing", defined($fields[10])?
+					($fields[2] eq "Book"? "Book": undef);
+			push @{$parameter_arrays{thing}},
+					defined($fields[10])?
 					$fields[10]: ($fields[2] eq "Book"?
 					("$fields[3]: $fields[4], ".
-					"$fields[6] $fields[5]"): undef));
-
+					"$fields[6] $fields[5]"): undef);
 			my $fieldidx = 11;
 			for my $i ("name", "location", "t0", "origin",
 						"importance", "comments") {
-				$stmt->bind_param(":".$i,
+				push @{$parameter_arrays{$i}},
 						defined($fields[$fieldidx])?
-						$fields[$fieldidx]: undef);
+						$fields[$fieldidx]: undef;
 				$fieldidx++;
 			}
-
-			$stmt->execute;
 		}
 		$linenumber++;
 	}
 	close($fh);
+
+	$dbh->{AutoCommit} = 0;
+
+	my $stmt = $dbh->prepare(<<~EOF);
+		INSERT INTO inventory
+			(id_string, quantity, checked, class, thing, name,
+			location, t0, origin, importance, comments)
+		VALUES
+			(?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?);
+		EOF
+	my $parameter_idx_numeric = 1;
+	for my $key ("id_string", "quantity", "class", "thing", "name",
+			"location", "t0", "origin", "importance", "comments") {
+		$stmt->bind_param_array($parameter_idx_numeric,
+						$parameter_arrays{$key});
+		$parameter_idx_numeric++;
+	}
+	$stmt->execute_array({});
+	$dbh->commit();
 }
 
 $dbh->disconnect;
