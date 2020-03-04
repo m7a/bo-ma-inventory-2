@@ -18,6 +18,7 @@ if($#ARGV < 0 or $ARGV[0] eq "--help") {
 my $dbfile = $ARGV[0];
 die("ERROR: Database $dbfile already exists. Will not overwrite.\n")
 								if(-f $dbfile);
+# TODO ASTAT SEEMS EMPTY FIELDS DO NOT PROPERLY EXPORT TO NULL VALUES? CHECK THAT
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "",
 						{ sqlite_unicode => 1 });
 # This schema is entirely non-normalized for the purpose of being super easy
@@ -31,7 +32,6 @@ $dbh->do(<<~EOF);
 		checked     DATETIME,
 		class       VARCHAR(128),
 		thing       VARCHAR(128),
-		name        VARCHAR( 64),
 		location    VARCHAR(128),
 		t0          VARCHAR( 32),
 		origin      VARCHAR( 64),
@@ -44,10 +44,10 @@ if($#ARGV eq 1) { # parameter CSVFILE is present
 	$dbh->{AutoCommit} = 0;
 	my $stmt = $dbh->prepare(<<~EOF);
 		INSERT INTO inventory
-			(id_string, quantity, checked, class, thing, name,
+			(id_string, quantity, checked, class, thing,
 			location, t0, origin, importance, comments)
 		VALUES
-			(:id_string, :quantity, NULL, :class, :thing, :name,
+			(:id_string, :quantity, NULL, :class, :thing,
 			:location, :t0, :origin, :importance, :comments);
 		EOF
 
@@ -85,7 +85,7 @@ if($#ARGV eq 1) { # parameter CSVFILE is present
 					"$fields[6] $fields[5]"): undef));
 
 			my $fieldidx = 11;
-			for my $i ("name", "location", "t0", "origin",
+			for my $i ("location", "t0", "origin",
 						"importance", "comments") {
 				$stmt->bind_param(":".$i,
 						defined($fields[$fieldidx])?
