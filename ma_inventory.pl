@@ -10,6 +10,7 @@ use autodie;
 require DBI;         # libdbd-sqlite3-perl
 require Text::Table; # libtext-table-perl
 
+use Try::Tiny;
 use File::Basename;
 use Data::Dumper 'Dumper'; # debug only
 
@@ -50,32 +51,79 @@ my %inputs = (
 my $cedit_internal_id = -1;
 my $implicit_quantity = 0;
 
-# == implementation ==
-
 sub inventory_main {
-	# -- pre --
+	inventory_init(@_);
+	inventory_draw_window_tbl();
+	inventory_draw_window_ercl();
+	inventory_add_tbl_win_bindings();
+	inventory_add_ercl_win_bindings();
+	inventory_update_displayed_table();
+	$curses->mainloop();
+	$dbh->disconnect;
+}
+
+sub inventory_init {
 	if($#_ < 0 or $_[0] eq "--help") {
 		print "USAGE ma_inventory DBFILE\n";
 		exit(0);
 	}
-
 	$dbh = DBI->connect("dbi:SQLite:dbname=$ARGV[0]", "", "",
 						{ sqlite_unicode => 1 });
 	$curses = Curses::UI->new(-clear_on_exit => 1);
 	$scrh = $curses->height;
 	$scrw = $curses->width;
+}
 
-	# -- draw windows --
+sub inventory_draw_window_tbl {
 	$tbl_win = $curses->add("win_table", "Window", -border => 0);
-	my @lbl_keys = (
-		["lb_f01", "1 RCL",     0], ["lb_f02", "2 Add",   8],
-		["lb_f08", "8 Delete", 56], ["lb_f10", "0 Exit", 72]
-	);
+	my @lbl_keys = (["lb_f01", "1 RCL",     0], ["lb_f02", "2 Add",   8],
+	                ["lb_f08", "8 Delete", 56], ["lb_f10", "0 Exit", 72]);
 	$tbl_win->add($_->[0], "Label", -text => $_->[1], -y => $scrh - 1,
 						-x => $_->[2]) for(@lbl_keys);
 	$tbl_list = $tbl_win->add("table", "Listbox", -y => 0,
 				-values => ["(...)"], -height => $scrh - 1);
+}
 
+sub inventory_add_ercl_win_bindings {
+	$ercl_win->set_binding(\&inventory_action_ok,     268); # F4  -- OK
+	$ercl_win->set_binding(\&inventory_action_recall, 271); # F7  -- recall
+	$ercl_win->set_binding(\&inventory_action_reset,  273); # F9  -- reset
+	$ercl_win->set_binding(\&inventory_action_cancel, 274); # F10 -- exit
+	$ercl_win->set_routine("inventory_tmp_key_esc",
+				\&inventory_temporary_default_binding_escape);
+	$ercl_win->set_binding(sub {
+		if($is_in_normal_mode) {
+			$is_in_normal_mode = 0;
+			$ercl_win->clear_binding("inventory_tmp_key_esc");
+		} else {
+			$is_in_normal_mode = 1;
+			$ercl_win->set_binding("inventory_tmp_key_esc", "");
+		}
+	}, Curses::UI::Common::CUI_ESCAPE()); # Escape (barcode sequence)
+}
+
+sub inventory_add_tbl_win_bindings {
+	$tbl_win->set_binding(sub {
+		my $selidx = $tbl_list->get_active_id;
+		my $switch = 1;
+		$switch = inventory_edit_id($tbl_internal_ids[$selidx])
+					if(defined($tbl_internal_ids[$selidx]));
+		inventory_display_editrcl() if($switch);
+	}, Curses::UI::TextEditor::KEY_ENTER()); # Enter -- Edit
+	$tbl_win->set_binding(sub {
+		# TODO z
+		$curses->dialog("Not implemented; Use Add dialog for recall.");
+	}, 265); # F1 -- recall
+	$tbl_win->set_binding(sub {
+		inventory_action_reset();
+		inventory_display_editrcl();
+	}, 266); # F2 -- add
+	$tbl_win->set_binding(sub {
+		$curses->mainloopExit;
+	}, 274); # F10 -- exit
+}
+
+sub inventory_draw_window_ercl {
 	$ercl_win = $curses->add("win_edit_rcl", "Window", -border => 0);
 	inventory_draw_codes($ercl_win);
 
@@ -86,6 +134,16 @@ sub inventory_main {
 	$lbl_status = $ercl_win->add("status_cnt", "Label",
 		-width => $line_width, -text => "unknown", -y => 2, -x => 33);
 
+	my $cy = inventory_draw_inputs($line_width);
+
+	# only display + enable auto-complete field if at least space for three
+	# entries
+	inventory_add_autocomplete($cy) if(($cy + 8) < $scrh);
+}
+
+# $_[0] line width
+sub inventory_draw_inputs {
+	my $line_width = shift;
 	# two loops to have a sensible tabindex order
 	my $cy = 2;
 	for my $key (@kinputs) {
@@ -107,6 +165,7 @@ sub inventory_main {
 					"Checkbox", -y => $cy, -x => 18)
 					unless(defined($val->{nocheckbox}));
 	}
+
 	# -- Enter options --
 	# Auto
 	#   Enter in ID -> RCL set to edit
@@ -125,83 +184,38 @@ sub inventory_main {
 	my $keep_enter_option = $ercl_win->add("keep_enter_option", "Checkbox",
 					-y => 0, -x => 18, -checked => 1);
 
-	# only display + enable auto-complete field if at least space for three
-	# entries
-	if(($cy + 8) < $scrh) {
-		my $autocomplete_height = $scrh - $cy - 5;
-		my $autocomplete_list = $ercl_win->add("autocomplete_list",
-			"Listbox", -radio => 1, values => [], -selected => 0,
+	return $cy;
+}
+
+# $_[0] current y
+sub inventory_add_autocomplete {
+	my $cy = shift;
+	my $autocomplete_height = $scrh - $cy - 5;
+	my $autocomplete_list = $ercl_win->add("autocomplete_list", "Listbox",
+			-radio => 1, values => [], -selected => 0,
 			-y => $cy + 5, -x => 18, -width => $scrw - 18 - 16,
 			-height => $autocomplete_height);
-		for my $key (@kinputs) {
-			next unless defined($inputs{$key}->{autocomplete});
-			my $field = $inputs{$key}->{text};
-			$field->onChange(sub {
-				# TODO ASTAT SUBSTAT GETTING EMPTY RESULTS HERE (FIRST RESULT) -- SHOULD ALL BE NULL!
-				# cannot use prepared statement here because
-				# it will interpret key as string rather than
-				# table name...
-				my $stmt = $dbh->prepare(
-					"SELECT DISTINCT $key FROM inventory ".
-					"WHERE $key LIKE ? ".
-					"ORDER BY $key ASC LIMIT ?"
-				);
-				$stmt->execute($field->get()."%",
-							$autocomplete_height);
-				my $results = [];
-				while((my @row = $stmt->fetchrow_array) != 0) {
-					push @{$results}, $row[0];
-				}
-				$autocomplete_list->values($results);
-				$autocomplete_list->draw();
-			});
-		}
+	for my $key (@kinputs) {
+		next unless defined($inputs{$key}->{autocomplete});
+		my $field = $inputs{$key}->{text};
+		$field->onChange(sub {
+			# cannot use prepared statement here because
+			# it will interpret key as string rather than
+			# table name...
+			my $stmt = $dbh->prepare(
+				"SELECT DISTINCT $key FROM inventory ".
+				"WHERE $key LIKE ? ".
+				"ORDER BY $key ASC LIMIT ?"
+			);
+			$stmt->execute($field->get()."%", $autocomplete_height);
+			my $results = [];
+			while((my @row = $stmt->fetchrow_array) != 0) {
+				push @{$results}, $row[0];
+			}
+			$autocomplete_list->values($results);
+			$autocomplete_list->draw();
+		});
 	}
-
-	# -- add bindings --
-	$tbl_win->set_binding(sub {
-		my $selidx = $tbl_list->get_active_id;
-		my $switch = 1;
-		$switch = inventory_edit_id($tbl_internal_ids[$selidx])
-					if(defined($tbl_internal_ids[$selidx]));
-		inventory_display_editrcl() if($switch);
-	}, Curses::UI::TextEditor::KEY_ENTER()); # Enter -- Edit
-	$tbl_win->set_binding(sub {
-		# TODO z
-		$curses->dialog("Not implemented; Use Add dialog for recall.");
-	}, 265); # F1 -- recall
-	$tbl_win->set_binding(sub {
-		inventory_action_reset();
-		inventory_display_editrcl();
-	}, 266); # F2 -- add
-	$tbl_win->set_binding(sub {
-		$curses->mainloopExit;
-	}, 274); # F10 -- exit
-
-	$ercl_win->set_binding(\&inventory_action_ok,     268); # F4  -- OK
-	$ercl_win->set_binding(\&inventory_action_ok,     271); # F7  -- recall
-	$ercl_win->set_binding(\&inventory_action_reset,  273); # F9  -- reset
-	$ercl_win->set_binding(\&inventory_action_cancel, 274); # F10 -- exit
-	$ercl_win->set_routine("inventory_tmp_key_esc",
-				\&inventory_temporary_default_binding_escape);
-	$ercl_win->set_binding(sub {
-		if($is_in_normal_mode) {
-			$is_in_normal_mode = 0;
-			$ercl_win->clear_binding("inventory_tmp_key_esc");
-		} else {
-			$is_in_normal_mode = 1;
-			$ercl_win->set_binding("inventory_tmp_key_esc", "");
-		}
-	}, Curses::UI::Common::CUI_ESCAPE()); # Escape (barcode sequence)
-
-	# -- update data --
-	inventory_update_displayed_table();
-
-	# -- mainloop --
-	$curses->mainloop();
-
-	# -- post --
-	$dbh->disconnect;
 }
 
 # $_[0] internal ID to RCL
@@ -270,10 +284,34 @@ sub inventory_action_reset {
 
 sub inventory_action_recall {
 	# match all fields against DB (like %%, ID needs to be absent or exact)
+	my $id = $inputs{id_internal}->{text}->get();
+	my $stmt;
+	if($id eq "") {
+		$stmt = $dbh->prepare("SELECT id_internal, id_string ".
+					"FROM inventory WHERE id_string = ?");
+		$stmt->execute([$id]);
+	} else {
+		$stmt = $dbh->prepare(
+			"SELECT id_internal, id_string FROM inventory ".
+			"WHERE class LIKE ? AND thing LIKE ? AND ".
+				"location LIKE ? AND t0 LIKE AND ".
+				"origin LIKE ? AND importance LIKE ?"
+		);
+		$stmt->execute([
+			$inputs{class}->{text}->get()."%",
+			$inputs{thing}->{text}->get()."%",
+			$inputs{location}->{text}->get()."%",
+			$inputs{origin}->{text}->get()."%",
+			$inputs{importance}->{text}->get()."%"
+		]);
+	}
+	# Display disambiguate dialog (with list of id_strings) if more than
+	# one result from query.
+	# TODO CSTAT N_IMPL
 }
 
 sub inventory_action_ok {
-	# ... TODO ASTAT: SAVE STEP!
+	# ... TODO SAVE STEP! (ADD or EDIT, handle implicit QTY like in old version)
 }
 
 sub inventory_action_cancel {
@@ -285,18 +323,19 @@ sub inventory_action_cancel {
 sub inventory_update_displayed_table {
 	# -5 for five column separator spaces
 	my $wavail = $scrw - 16 - 3 - 9 - 3 - 5;
-	my @colmaxlen = (16, 3, int($wavail * 1 / 2),
-						int($wavail * 1 / 2), 9, 3);
+	my @colmaxlen = (16, 3, int($wavail * 1 / 3),
+						int($wavail * 2 / 3), 9, 3);
 	my $stmt = $dbh->prepare("SELECT id_internal, id_string, quantity, ".
 			"class, thing, location, importance FROM inventory;");
-	$stmt->execute;
+	$stmt->execute();
 	$tbl_obj->clear;
 	@tbl_internal_ids = (undef);
+	$curses->leave_curses();
 	while((my @row = $stmt->fetchrow_array) != 0) {
 		push @tbl_internal_ids, $row[0];
 		my @outrow;
 		for(0 .. 5) {
-			my $curr = $row[$_ + 1];
+			my $curr = defined($row[$_ + 1])? $row[$_ + 1]: "";
 			push @outrow, (length($curr) > $colmaxlen[$_]?
 				substr($curr, 0, $colmaxlen[$_]): $curr);
 		}
