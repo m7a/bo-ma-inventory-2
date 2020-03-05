@@ -18,7 +18,6 @@ if($#ARGV < 0 or $ARGV[0] eq "--help") {
 my $dbfile = $ARGV[0];
 die("ERROR: Database $dbfile already exists. Will not overwrite.\n")
 								if(-f $dbfile);
-# TODO ASTAT SEEMS EMPTY FIELDS DO NOT PROPERLY EXPORT TO NULL VALUES? CHECK THAT
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "",
 						{ sqlite_unicode => 1 });
 # This schema is entirely non-normalized for the purpose of being super easy
@@ -76,20 +75,21 @@ if($#ARGV eq 1) { # parameter CSVFILE is present
 
 			$stmt->bind_param(":id_string", $fields[0]);
 			$stmt->bind_param(":quantity",  $fields[1]);
-			$stmt->bind_param(":class", defined($fields[9])?
+			$stmt->bind_param(":class", $fields[9] ne ""?
 					$fields[9]:
 					($fields[2] eq "Book"? "Book": undef));
-			$stmt->bind_param(":thing", defined($fields[10])?
+			$stmt->bind_param(":thing", $fields[10] ne ""?
 					$fields[10]: ($fields[2] eq "Book"?
 					("$fields[3]: $fields[4], ".
 					"$fields[6] $fields[5]"): undef));
 
-			my $fieldidx = 11;
+			my $fieldidx = 12;
 			for my $i ("location", "t0", "origin",
 						"importance", "comments") {
 				$stmt->bind_param(":".$i,
-						defined($fields[$fieldidx])?
-						$fields[$fieldidx]: undef);
+					(defined($fields[$fieldidx]) and
+					$fields[$fieldidx] ne "")?
+					$fields[$fieldidx]: undef);
 				$fieldidx++;
 			}
 
