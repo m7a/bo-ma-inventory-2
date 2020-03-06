@@ -20,11 +20,12 @@ require Curses::UI;  # libcurses-ui-perl
 
 # -- other --
 my $dbh; # DBI connection
-my @kinputs = qw(id_string quantity class thing location t0 origin importance comments);
+my @kinputs = qw(id_string quantity class thing location t0 origin importance comments); # const
+my $table_ui_fields = "id_internal, id_string, quantity, class, thing, ".
+						"location, importance"; # const
 
 # -- data --
 my @tbl_internal_ids;
-my $tbl_obj = Text::Table->new("ID", "Qty", "Class", "Thing", "Loc", "Imp");
 my $is_in_normal_mode = 0; # bool
 
 # -- ui --
@@ -284,30 +285,71 @@ sub inventory_action_reset {
 
 sub inventory_action_recall {
 	# match all fields against DB (like %%, ID needs to be absent or exact)
-	my $id = $inputs{id_internal}->{text}->get();
+	my $id = $inputs{id_string}->{text}->get();
 	my $stmt;
 	if($id eq "") {
-		$stmt = $dbh->prepare("SELECT id_internal, id_string ".
-					"FROM inventory WHERE id_string = ?");
-		$stmt->execute([$id]);
-	} else {
 		$stmt = $dbh->prepare(
-			"SELECT id_internal, id_string FROM inventory ".
+			"SELECT $table_ui_fields FROM inventory ".
 			"WHERE class LIKE ? AND thing LIKE ? AND ".
-				"location LIKE ? AND t0 LIKE AND ".
-				"origin LIKE ? AND importance LIKE ?"
+				"location LIKE ? AND origin LIKE ? AND ".
+				"importance LIKE ?"
 		);
-		$stmt->execute([
+		$stmt->execute(
 			$inputs{class}->{text}->get()."%",
 			$inputs{thing}->{text}->get()."%",
 			$inputs{location}->{text}->get()."%",
 			$inputs{origin}->{text}->get()."%",
 			$inputs{importance}->{text}->get()."%"
-		]);
+		);
+	} else {
+		$stmt = $dbh->prepare("SELECT id_internal FROM inventory ".
+							"WHERE id_string = ?");
+		$stmt->execute($id);
 	}
-	# Display disambiguate dialog (with list of id_strings) if more than
-	# one result from query.
-	# TODO CSTAT N_IMPL
+
+	my $all_results = $stmt->fetchall_arrayref();
+	my $num_results = scalar @{$all_results};
+
+	if($num_results == 0) {
+		$curses->dialog("No matching item found.");
+		return;
+	}
+
+	my $id_internal_selected = ($num_results == 1)? $all_results->[0]->[0]:
+			inventory_disambiguate_recall_results($all_results);
+
+	inventory_edit_id($id_internal_selected)
+					if defined $id_internal_selected;
+}
+
+# $_[0] all results arrayref
+sub inventory_disambiguate_recall_results {
+	my $all_results = shift;
+	my $window = $curses->add("win_disambiguate", "Window", -border => 0);
+	$window->add("lb_disambiguate", "Label", -y => $scrh - 1, -text =>
+				"-- DISAMBIGUATE --   ENTER: select item".
+				"                                0 Cancel");
+	my @internal_ids = ();
+	my $tbl = $window->add("table", "Listbox", -y => 0, -height => $scrh-1,
+		-values => inventory_add_table_to_list($all_results,
+							\@internal_ids));
+
+	my $selection = undef;
+
+	my $local_exit = sub {
+		$window->lose_focus;
+		$curses->delete("win_disambiguate");
+		$ercl_win->focus;
+	};
+	$window->set_binding(sub {
+		my $selidx = $tbl->get_active_id();
+		$selection = $internal_ids[$selidx] unless ($selidx == 0);
+		$local_exit->();
+	}, Curses::UI::TextEditor::KEY_ENTER()); # Enter -- select
+	$window->set_binding($local_exit, 274); # F10 -- cancel
+
+	$window->modalfocus;
+	return $selection;
 }
 
 sub inventory_action_ok {
@@ -321,27 +363,35 @@ sub inventory_action_cancel {
 }
 
 sub inventory_update_displayed_table {
+	my $stmt = $dbh->prepare("SELECT $table_ui_fields FROM inventory;");
+	$stmt->execute();
+	$tbl_list->values(inventory_add_table_to_list(
+			$stmt->fetchall_arrayref(), \@tbl_internal_ids));
+}
+
+# $_[0] statement
+# $_[1] ref internal ids
+# return values array reference
+sub inventory_add_table_to_list {
+	my ($all_results, $internal_ids) = @_;
 	# -5 for five column separator spaces
 	my $wavail = $scrw - 16 - 3 - 9 - 3 - 5;
 	my @colmaxlen = (16, 3, int($wavail * 1 / 3),
 						int($wavail * 2 / 3), 9, 3);
-	my $stmt = $dbh->prepare("SELECT id_internal, id_string, quantity, ".
-			"class, thing, location, importance FROM inventory;");
-	$stmt->execute();
-	$tbl_obj->clear;
-	@tbl_internal_ids = (undef);
-	$curses->leave_curses();
-	while((my @row = $stmt->fetchrow_array) != 0) {
-		push @tbl_internal_ids, $row[0];
+	my $tbl_obj = Text::Table->new("ID", "Qty", "Class", "Thing", "Loc",
+									"Imp");
+	@{$internal_ids} = (undef);
+	for my $rrow (@{$all_results}) {
+		push @{$internal_ids}, $rrow->[0];
 		my @outrow;
 		for(0 .. 5) {
-			my $curr = defined($row[$_ + 1])? $row[$_ + 1]: "";
+			my $curr = defined($rrow->[$_+1])? $rrow->[$_+1]: "";
 			push @outrow, (length($curr) > $colmaxlen[$_]?
 				substr($curr, 0, $colmaxlen[$_]): $curr);
 		}
 		$tbl_obj->add(@outrow);
 	}
-	$tbl_list->values([$tbl_obj->table]);
+	return [$tbl_obj->table];
 }
 
 # TODO z CODES TBD
