@@ -19,7 +19,7 @@ my $dbfile = $ARGV[0];
 die("ERROR: Database $dbfile already exists. Will not overwrite.\n")
 								if(-f $dbfile);
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "",
-						{ sqlite_unicode => 1 });
+		{ sqlite_unicode => 1, AutoCommit => 0, RaiseError => 1 });
 # This schema is entirely non-normalized for the purpose of being super easy
 # to process and to aid editing the database directly.
 # PRIMARY KEY implies AUTOINCREMENT here.
@@ -40,7 +40,6 @@ $dbh->do(<<~EOF);
 	EOF
 
 if($#ARGV eq 1) { # parameter CSVFILE is present
-	$dbh->{AutoCommit} = 0;
 	my $stmt = $dbh->prepare(<<~EOF);
 		INSERT INTO inventory
 			(id_string, quantity, checked, class, thing,
