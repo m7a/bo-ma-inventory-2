@@ -1,0 +1,40 @@
+% Ma_Sys.ma Barcodes LaTeX template file 1.0.0.0, Copyright (c) 2016 Ma_Sys.ma.
+% For further info send an e-mail to Ma_Sys.ma@web.de.
+\documentclass[12pt,parskip]{scrartcl}
+\usepackage{geometry}
+% 11mm for printer border tolerance issue
+\geometry{a4paper,portrait,left=10.5mm,right=9mm,top=20.5mm,bottom=20mm}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+\usepackage[ocr-b]{ocr}
+
+\usepackage{graphicx}
+\usepackage{adjustbox}
+\usepackage{kpfonts}
+
+\newcommand{\barcode}[2]{
+	\begin{minipage}{0.25\linewidth}
+\begin{minipage}[b][25.4mm][c]{0.065\linewidth}
+	\rotatebox{90}{{\scriptsize Ma\_Sys.ma}}%
+\end{minipage}%
+\begin{minipage}[b][25.4mm][c]{0.13\linewidth}
+	\includegraphics[width=\linewidth]{masysmaicon_print_sw}\\[1mm]
+	\includegraphics[width=\linewidth]{#1s}
+\end{minipage}%
+\begin{minipage}[b][25.4mm][c]{0.79\linewidth}
+	\centering
+	\includegraphics[width=0.87\linewidth]{#1p}\\[-2mm]
+	{\scriptsize\ocr{#2}}
+\end{minipage}%
+\end{minipage}%
+}
+
+\pagestyle{empty}
+\thispagestyle{empty}
+
+\begin{document}
+\input{toc.tex}
+\end{document}

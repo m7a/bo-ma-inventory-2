@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project default="jar">
+
+<!-- APPLICATION METADATA -->
+<property name="masysma.target" value="ma-inventory-2-barcodegensvg"/>
+<property name="masysma.main" value="ma.inventory2.BarCodeGenSVG"/>
+
+<!-- CONSTANT TPL IMPORT / PART 1 -->
+<property environment="env"/>
+<condition property="masysma.internal.includepath.rel" value="${env.MDVL_CI_PHOENIX_ROOT}" else="../.."><isset property="env.MDVL_CI_PHOENIX_ROOT"/></condition>
+<property name="masysma.internal.includepath" location="${masysma.internal.includepath.rel}"/>
+
+<!-- automatically detect and use jexer.jar -->
+<target name="check_okapi_jar">
+       <available file="/usr/share/java/okapibarcode-0.2.3.jar"
+                                               property="okapi.jar.present"/>
+</target>
+<target name="use_okapi_jar" depends="check_okapi_jar" if="okapi.jar.present">
+       <path id="masysma.classpath">
+               <fileset dir="/usr/share/java"
+					includes="okapibarcode-0.2.3.jar"/>
+       </path>
+</target>
+<target name="build_okapi_jar" depends="check_okapi_jar"
+                                               unless="okapi.jar.present">
+       <masysma_require_repo masysmarepoid="bp-okapibarcode"/>
+       <!-- TODO z WARNING: This fails on a concurrently built bp-okapibarcode -->
+       <ant dir="${masysma.internal.includepath}/bp-okapibarcode"/>
+       <copy todir="lib" file="${masysma.internal.includepath}/bp-okapibarcode/build/build/libs/okapibarcode-0.2.3.jar"/>
+       <ant dir="${masysma.internal.includepath}/bp-okapibarcode"
+							target="dist-clean"/>
+</target>
+<target name="establish_jar" extensionOf="masysma_hook_java_predep"
+                               depends="use_okapi_jar,build_okapi_jar"/>
+
+<!-- PART 2 -->
+<property name="masysma.internal.loadpath" value="${masysma.internal.includepath}/co-build/ant-build-template.xml"/>
+<condition property="masysma.internal.load" value="file://${masysma.internal.loadpath}" else="https://raw.githubusercontent.com/m7a/co-build/master/ant-build-template.xml"><resourceexists><file file="${masysma.internal.loadpath}"/></resourceexists></condition>
+<import><url url="${masysma.internal.load}"/></import>
+
+</project>

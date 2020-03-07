@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project default="build">
+	<target name="build">
+		<copy file="ma_inventory_init.pl" tofile="ma_inventory_init"/>
+	</target>
+	<target name="dist-clean">
+		<delete file="ma_inventory_init"/>
+	</target>
+	<!-- compat only -->
+	<target name="clean"/>
+</project>

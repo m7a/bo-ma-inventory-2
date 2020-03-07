@@ -97,7 +97,7 @@ sub inventory_init {
 sub inventory_draw_window_tbl {
 	$tbl_win = $curses->add("win_table", "Window", -border => 0);
 	$tbl_win->add("lb_fnum", "Label", -y => $scrh - 1, -x => 0,
-		-text => "        2 ARCL                                 ".
+		-text => "1 GenID 2 ARCL                                 ".
 						"8 Delete         0 Exit");
 	$tbl_list = $tbl_win->add("table", "Listbox", -y => 0,
 				-values => ["(...)"], -height => $scrh - 1);
@@ -116,6 +116,7 @@ sub inventory_add_tbl_win_bindings {
 			inventory_display_editrcl();
 		}
 	}, Curses::UI::TextEditor::KEY_ENTER()); # Enter -- Edit
+	$tbl_win->set_binding(\&inventory_generate_ids, 265); # F1 -- generate
 	$tbl_win->set_binding(sub {
 		$drop_next_enter = 0;
 		$cedit_changed = 0;
@@ -597,6 +598,41 @@ sub inventory_temporary_default_binding_stop_drop {
 	$drop_next_enter = 0;
 	$ercl_win->clear_binding("inventory_tmp_stop_drop");
 	$ercl_win->process_bindings($key);
+}
+
+################################################################################
+## GENERATE IDS ################################################################
+################################################################################
+
+sub inventory_generate_ids {
+	my $num_to_gen = 128;
+
+	my $stmt = $dbh->prepare("SELECT id_string FROM inventory ".
+		"WHERE length(id_string) = 16 ORDER BY id_string DESC LIMIT 1");
+	$stmt->execute();
+	my @result = $stmt->fetchrow_array();
+	my $current_max_id = $result[0];
+
+	my $dialog = $tbl_win->add("dialog_generate", "Dialog::Basic",
+		-message => "Generate 128 IDs from $current_max_id exclusive?",
+		-buttons => ["yes", "no"]);
+	$dialog->modalfocus;
+	my $answer = $dialog->get();
+	$tbl_win->delete("dialog_generate");
+	$curses->leave_curses();
+	if($answer) {
+		$stmt = $dbh->prepare("INSERT INTO inventory ".
+				"(id_string, quantity) VALUES ".
+				("(?, 0),") x ($num_to_gen - 1)." (?, 0);");
+		my @ids = ();
+		for(my $i = 1; $i <= $num_to_gen; $i++) {
+			push @ids, $current_max_id + $i;
+		}
+		$stmt->execute(@ids);
+		inventory_update_displayed_table;
+	} else {
+		$tbl_win->draw();
+	}
 }
 
 ################################################################################

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project default="build">
+
+<!-- APPLICATION METADATA -->
+<property name="mdpc.name"    value="mdvl-ma-inventory-2"/>
+<property name="mdpc.section" value="database"/>
+<property name="mdpc.descrs"  value="Ma_Sys.ma Inventory 2 -- Barcode-enabled single-user inventory script"/>
+<property name="mdpc.arch"    value="all"/>
+<property name="mdpc.depends">libdbd-sqlite3-perl, libtext-table-perl,
+	libbarcode-datamatrix-perl, perl, libcurses-perl,
+	libterm-readkey-perl</property>
+<property name="mdpc.descrl">
+ Provides a terminal UI to access an inventory stored in an SQLite 3 database.
+ Additionally, controlling essential functions like adding items integrates
+ a barcode scanner including the possibility to control parts of the user
+ interface with it.
+</property>
+
+<property name="mdpc.file.install">
+Curses /usr/share/mdvl-ma-inventory-2/Curses
+ma_inventory.pl /usr/share/mdvl-ma-inventory-2
+barcodes.tex /usr/share/mdvl-ma-inventory-2
+masysmaicon_print_sw.pdf /usr/share/mdvl-ma-inventory-2
+ma_inventory_init/ma_inventory_init /usr/bin
+ma_inventory /usr/bin
+ma_inventory_barcodegensvg/ma-inventory-2-barcodegensvg.jar /usr/share/java
+</property>
+
+<property name="mdpc.copyright.file"><![CDATA[
+License: GPL-3+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+License-Reference: /usr/share/common-licenses/GPL-3
+
+License: Perl
+ This file is part of Curses::UI. Curses::UI is free software.
+ You can redistribute it and/or modify it under the same terms
+ as perl itself.
+ .
+ Perl5 is Copyright (C) 1993-2005, by Larry Wall and others.
+ .
+ It is free software; you can redistribute it and/or modify it under the terms of either:
+ .
+ a) the GNU General Public License as published by the Free Software Foundation; either version 1, or (at your option) any later version, or
+ .
+ b) the "Artistic License". 
+
+Files: debian/* ma_inventory_barcodegensvg/* ma_inventory_init/* xdev/* masysmaicon_print_sw.pdf ma_inventory.pl barcodes.tex build.xml ma_inventory ma_inventory_export_to_pdf
+Copyright: Copyright (c) 2020 Ma_Sys.ma <Ma_Sys.ma@web.de>
+License: GPL-3+
+
+Files: Curses/*
+Copyright:
+ (c) 2001-2002 by Maurice Makaay. All rights reserved.
+License: Perl
+]]></property>
+
+<!-- CI INTEGRATION -->
+<target name="package_triggered" depends="package">
+	<property name="masysma.ci.trigger" value="newver"/>
+</target>
+
+<!-- CONSTANT TPL IMPORT -->
+<property environment="env"/>
+<condition property="masysma.internal.includepath.rel" value="${env.MDVL_CI_PHOENIX_ROOT}" else=".."><isset property="env.MDVL_CI_PHOENIX_ROOT"/></condition>
+<property name="masysma.internal.includepath" location="${masysma.internal.includepath.rel}"/>
+<property name="masysma.internal.loadpath" value="${masysma.internal.includepath}/co-build/ant-build-template.xml"/>
+<condition property="masysma.internal.load" value="file://${masysma.internal.loadpath}" else="https://raw.githubusercontent.com/m7a/co-build/master/ant-build-template.xml"><resourceexists><file file="${masysma.internal.loadpath}"/></resourceexists></condition>
+<import><url url="${masysma.internal.load}"/></import>
+
+</project>
