@@ -20,37 +20,40 @@ require Curses::UI;  # libcurses-ui-perl
 
 # -- other --
 my $dbh; # DBI connection
-my @kinputs = qw(id_string quantity class thing location t0 origin importance comments); # const
+
+# -- constant --
+my @kinputs = qw(id_string quantity class thing location t0 origin importance comments);
 my $table_ui_fields = "id_internal, id_string, quantity, class, thing, ".
-						"location, importance"; # const
+						"location, importance";
 
 # -- data --
-my @tbl_internal_ids;
+my @tbl_internal_ids; # array of assoc internal ids
 my $is_in_normal_mode = 0; # bool
 
 # -- ui --
-my $curses;   # Curses UI
-my $scrh;     # integer
-my $scrw;     # integer
-my $tbl_list; # Listbox table
-my $ercl_win; # Window
-my $tbl_win;  # Window
-my $lbl_status; # Label
+my $curses;       # Curses UI
+my $scrh;         # integer
+my $scrw;         # integer
+my $tbl_list;     # Listbox table
+my $ercl_win;     # Window
+my $tbl_win;      # Window
+my $lbl_status;   # Label
+my $enter_option; # Popupmenu
 
 # -- current edit --
 my %inputs = (
-	id_string  => { label => "ID", nocheckbox => 1 },
-	quantity   => { label => "Quantity", nocheckbox => 1 },
-	class      => { label => "Class", autocomplete => 1 },
-	thing      => { label => "Thing", autocomplete => 1 },
-	location   => { label => "Location", autocomplete => 1 },
-	t0         => { label => "T0", autocomplete => 1 },
-	origin     => { label => "Origin", autocomplete => 1 },
-	importance => { label => "Importance", autocomplete => 1, },
-	comments   => { label => "Comments", height => 4 }
+	id_string  => { label => "ID",         nocheckbox   => 1 },
+	quantity   => { label => "Quantity",   nocheckbox   => 1 },
+	class      => { label => "Class",      autocomplete => 1 },
+	thing      => { label => "Thing",      autocomplete => 1 },
+	location   => { label => "Location",   autocomplete => 1 },
+	t0         => { label => "T0",         autocomplete => 1 },
+	origin     => { label => "Origin",     autocomplete => 1 },
+	importance => { label => "Importance", autocomplete => 1 },
+	comments   => { label => "Comments",   height       => 4 }
 );
 my $cedit_internal_id = -1;
-my $implicit_quantity = 0;
+my $cedit_changed = 0;
 
 sub inventory_main {
 	inventory_init(@_);
@@ -69,7 +72,7 @@ sub inventory_init {
 		exit(0);
 	}
 	$dbh = DBI->connect("dbi:SQLite:dbname=$ARGV[0]", "", "",
-						{ sqlite_unicode => 1 });
+		{ sqlite_unicode => 1, AutoCommit => 1, RaiseError => 1 });
 	$curses = Curses::UI->new(-clear_on_exit => 1);
 	$scrh = $curses->height;
 	$scrw = $curses->width;
@@ -77,10 +80,9 @@ sub inventory_init {
 
 sub inventory_draw_window_tbl {
 	$tbl_win = $curses->add("win_table", "Window", -border => 0);
-	my @lbl_keys = (["lb_f01", "1 RCL",     0], ["lb_f02", "2 Add",   8],
-	                ["lb_f08", "8 Delete", 56], ["lb_f10", "0 Exit", 72]);
-	$tbl_win->add($_->[0], "Label", -text => $_->[1], -y => $scrh - 1,
-						-x => $_->[2]) for(@lbl_keys);
+	$tbl_win->add("lb_fnum", "Label", -y => $scrh - 1, -x => 0,
+		-text => "        2 ARCL                                 ".
+						"8 Delete         0 Exit");
 	$tbl_list = $tbl_win->add("table", "Listbox", -y => 0,
 				-values => ["(...)"], -height => $scrh - 1);
 }
@@ -106,22 +108,29 @@ sub inventory_add_ercl_win_bindings {
 sub inventory_add_tbl_win_bindings {
 	$tbl_win->set_binding(sub {
 		my $selidx = $tbl_list->get_active_id;
-		my $switch = 1;
-		$switch = inventory_edit_id($tbl_internal_ids[$selidx])
-					if(defined($tbl_internal_ids[$selidx]));
-		inventory_display_editrcl() if($switch);
+		if(defined($tbl_internal_ids[$selidx]) and
+				inventory_edit_id($tbl_internal_ids[$selidx])) {
+			$cedit_changed = 0;
+			inventory_display_editrcl();
+		}
 	}, Curses::UI::TextEditor::KEY_ENTER()); # Enter -- Edit
 	$tbl_win->set_binding(sub {
-		# TODO z
-		$curses->dialog("Not implemented; Use Add dialog for recall.");
-	}, 265); # F1 -- recall
-	$tbl_win->set_binding(sub {
+		$cedit_changed = 0;
 		inventory_action_reset();
 		inventory_display_editrcl();
 	}, 266); # F2 -- add
+	$tbl_win->set_binding(\&inventory_action_delete, 272); # F8 -- delete
 	$tbl_win->set_binding(sub {
 		$curses->mainloopExit;
 	}, 274); # F10 -- exit
+}
+
+sub inventory_action_delete {
+	my $id_to_delete = $tbl_internal_ids[$tbl_list->get_active_id];
+	return unless defined $id_to_delete;
+	my $stmt = $dbh->prepare("DELETE FROM inventory WHERE id_internal = ?");
+	$stmt->execute($id_to_delete);
+	inventory_update_displayed_table();
 }
 
 sub inventory_draw_window_ercl {
@@ -168,22 +177,15 @@ sub inventory_draw_inputs {
 	}
 
 	# -- Enter options --
-	# Auto
-	#   Enter in ID -> RCL set to edit
-	#   Enter in other field -> Autocomplete if selected otherwise ignore
-	# OK
-	#   Enter -> OK (save i.e. add or update depending on ID)
-	# Nothing
-	#   Enter -> ignore
-	# Recall
-	#   Enter -> RCL from DB and set form to first result (edit)
-	# Autocomplete
-	#   Enter -> take from autocomplete use first if nothing selected
-	my $enter_option = $ercl_win->add("enter_option", "Popupmenu",
+	# Auto  if in ID          -> RCL
+	#       if in other field -> autocomplete if selection or ignore
+	# OK                      -> OK
+	# Nothing                 -> ignore
+	# Recall                  -> RCL
+	# Autocomplete            -> autocomplete use first if nothing selected
+	$enter_option = $ercl_win->add("enter_option", "Popupmenu",
 		-y => 0, -x => 33, -selected => 0,
 		-values => ["Auto", "Recall", "OK", "Autocomplete", "Nothing"]);
-	my $keep_enter_option = $ercl_win->add("keep_enter_option", "Checkbox",
-					-y => 0, -x => 18, -checked => 1);
 
 	return $cy;
 }
@@ -235,18 +237,18 @@ sub inventory_edit_id {
 		$cedit_internal_id = -1;
 		return 0;
 	}
-	$inputs{$_}->{text}->text($row->{$_} // "") for (@kinputs);
-	$implicit_quantity = $row->{quantity};
-	inventory_update_status("EDIT");
+	for (@kinputs) {
+		my $val = $row->{$_} // "";
+		# Set quantity to 1 if input quantity is 0 as to allow add
+		# function by disambiguation of already existent prepared
+		# entries.
+		$val = 1 if($_ eq "quantity" and $val == 0);
+		$inputs{$_}->{text}->text($val);
+	}
+	$lbl_status->text("ASSOC  dID=$cedit_internal_id ".
+						"iQTY=$row->{quantity}");
 	$inputs{id_string}->{text}->focus();
 	return 1;
-}
-
-# $_[0] mode (EDIT, ARCL)
-sub inventory_update_status {
-	my $mode = shift;
-	$lbl_status->text("$mode dID=$cedit_internal_id ".
-						"iQTY=$implicit_quantity");
 }
 
 sub inventory_display_editrcl {
@@ -254,6 +256,7 @@ sub inventory_display_editrcl {
 	$ercl_win->focus;
 }
 
+# TODO z BARCODE SCANNER INTEGRATION: THIS IS NOT IMMEDIATE (MAYBE DUE TO BUFFERING?) AND IF FOLLOWED BY ENTER CAN HAVE SOME STRANGE RESULTS -- NEED TO CHECK THIS WHITH THE BARCODE SCANNER BUT MAYBE WE NEED SOME SPECIAL PROVISIONS TO (1) HANDLE DATA IMMEDIATELY AND (2) DELETE TRAILING ENTERS -- a solution to 2 only might be sufficient for scanner integration...
 sub inventory_temporary_default_binding_escape {
 	my ($_binding, $key, @_extra) = @_; # Widget.pm~977
 	$is_in_normal_mode = 0;
@@ -274,12 +277,16 @@ sub inventory_temporary_default_binding_escape {
 }
 
 sub inventory_action_reset {
-	# clear form and disassociate from edit. keep enter option and reset
-	# all other checkboxes.
+	# clear form and disassociate from edit.
+	# keep enter option and reset all other values independently of their
+	# checkboxes.
 	$inputs{$_}->{text}->text("") for (@kinputs);
+	inventory_disassociate();
+}
+
+sub inventory_disassociate {
 	$cedit_internal_id = -1;
-	$implicit_quantity = 0;
-	inventory_update_status("ARCL");
+	$lbl_status->text("DISSOC dID=$cedit_internal_id iQTY=0");
 	$inputs{id_string}->{text}->focus();
 }
 
@@ -294,13 +301,8 @@ sub inventory_action_recall {
 				"location LIKE ? AND origin LIKE ? AND ".
 				"importance LIKE ?"
 		);
-		$stmt->execute(
-			$inputs{class}->{text}->get()."%",
-			$inputs{thing}->{text}->get()."%",
-			$inputs{location}->{text}->get()."%",
-			$inputs{origin}->{text}->get()."%",
-			$inputs{importance}->{text}->get()."%"
-		);
+		$stmt->execute(map { $inputs{$_}->{text}->get()."%" }
+				qw(class thing location origin importance));
 	} else {
 		$stmt = $dbh->prepare("SELECT id_internal FROM inventory ".
 							"WHERE id_string = ?");
@@ -353,12 +355,45 @@ sub inventory_disambiguate_recall_results {
 }
 
 sub inventory_action_ok {
-	# ... TODO SAVE STEP! (ADD or EDIT, handle implicit QTY like in old version)
+	my @args = map {
+		my $val = $inputs{$_}->{text}->get;
+		$val eq ""? undef: $val;
+	} @kinputs;
+
+	my $stmt;
+	if($cedit_internal_id == -1) {
+		$stmt = $dbh->prepare(
+			"INSERT INTO inventory (id_string, quantity, checked, ".
+					"class, thing, location, t0, origin, ".
+					"importance, comments) ".
+			"VALUES (?, ?, datetime('now', 'utc'), ".
+							"?, ?, ?, ?, ?, ?, ?)"
+		);
+	} else {
+		$stmt = $dbh->prepare(
+			"UPDATE inventory SET id_string = ?, quantity = ?, ".
+				"checked = datetime('now', 'utc'), class = ?, ".
+				"thing = ?, location = ?, t0 = ?, origin = ?, ".
+				"importance = ?, comments = ? ".
+			"WHERE id_internal = ?"
+		);
+		push @args, $cedit_internal_id;
+	}
+
+	$stmt->execute(@args);
+
+	for (@kinputs) {
+		$inputs{$_}->{text}->text("") if($inputs{$_}->{nocheckbox} or
+					not $inputs{$_}->{checkbox}->get());
+	}
+	inventory_disassociate();
+
+	$cedit_changed = 1;
 }
 
 sub inventory_action_cancel {
-	# TODO z NOT IMMEDIATE?
 	$ercl_win->lose_focus;
+	inventory_update_displayed_table() if($cedit_changed);
 	$tbl_win->focus;
 }
 
@@ -367,6 +402,7 @@ sub inventory_update_displayed_table {
 	$stmt->execute();
 	$tbl_list->values(inventory_add_table_to_list(
 			$stmt->fetchall_arrayref(), \@tbl_internal_ids));
+	$tbl_list->draw();
 }
 
 # $_[0] statement
