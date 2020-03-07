@@ -7,8 +7,9 @@ use strict;
 use warnings FATAL => 'all';
 use autodie;
 
-require DBI;         # libdbd-sqlite3-perl
-require Text::Table; # libtext-table-perl
+require DBI;                 # libdbd-sqlite3-perl
+require Text::Table;         # libtext-table-perl
+require Barcode::DataMatrix; # libbarcode-datamatrix-perl
 
 use Try::Tiny;
 use File::Basename;
@@ -25,6 +26,9 @@ my $dbh; # DBI connection
 my @kinputs = qw(id_string quantity class thing location t0 origin importance comments);
 my $table_ui_fields = "id_internal, id_string, quantity, class, thing, ".
 						"location, importance";
+my $padding     = 14;           # checkbox offset
+my $offset      = $padding + 5; # label offset
+my $field_start = $offset + 11; # field offset
 
 # -- data --
 my @tbl_internal_ids; # array of assoc internal ids
@@ -138,17 +142,26 @@ sub inventory_draw_window_ercl {
 	inventory_draw_codes($ercl_win);
 
 	$ercl_win->add("lb_enter_option", "Label", -text => "On Enter",
-					-y => 0, -x => 22);
-	$ercl_win->add("status", "Label", -text => "Status", -y => 2, -x => 22);
-	my $line_width = $scrw - 33 - 18;
+					-y => 0, -x => $offset);
+	$ercl_win->add("status", "Label", -text => "Status", -y => 2,
+								-x => $offset);
+	my $line_width = $scrw - $field_start - $padding;
 	$lbl_status = $ercl_win->add("status_cnt", "Label",
-		-width => $line_width, -text => "unknown", -y => 2, -x => 33);
+		-width => $line_width, -text => "unknown", -y => 2,
+		-x => $field_start);
 
 	my $cy = inventory_draw_inputs($line_width);
 
 	# only display + enable auto-complete field if at least space for three
 	# entries
-	inventory_add_autocomplete($cy) if(($cy + 8) < $scrh);
+	my $autocomplete_is_available = ($cy + 8) < $scrh;
+	inventory_add_autocomplete($cy) if($autocomplete_is_available);
+
+	# add enter handler for remaining entries and all entries if no
+	# autocomplete enabled.
+	inventory_add_enter_handler($_, undef)
+		for(grep { (not $inputs{$_}->{autocomplete} or
+		            not $autocomplete_is_available) } @kinputs);
 }
 
 # $_[0] line width
@@ -159,11 +172,11 @@ sub inventory_draw_inputs {
 	for my $key (@kinputs) {
 		my $val = $inputs{$key};
 		$cy += 2;
-		$ercl_win->add("lbl_input_".$key, "Label",
-				-text => $val->{label}, -y => $cy, -x => 22);
+		$ercl_win->add("lbl_input_".$key, "Label", -x => $offset,
+					-y => $cy, -text => $val->{label});
 		my $height = $val->{height} // 1;
 		$val->{text} = $ercl_win->add("text_input_".$key, "TextEditor",
-			-y => $cy, -x => 33, -showlines => 1,
+			-y => $cy, -x => $field_start, -showlines => 1,
 			-width => $line_width,
 			-singleline => ($height == 1), -height => $height);
 	}
@@ -172,7 +185,7 @@ sub inventory_draw_inputs {
 		my $val = $inputs{$key};
 		$cy += 2;
 		$val->{checkbox} = $ercl_win->add("chck_input_".$key,
-					"Checkbox", -y => $cy, -x => 18)
+					"Checkbox", -y => $cy, -x => $padding)
 					unless(defined($val->{nocheckbox}));
 	}
 
@@ -184,7 +197,7 @@ sub inventory_draw_inputs {
 	# Recall                  -> RCL
 	# Autocomplete            -> autocomplete use first if nothing selected
 	$enter_option = $ercl_win->add("enter_option", "Popupmenu",
-		-y => 0, -x => 33, -selected => 0,
+		-y => 0, -x => $field_start, -selected => 0,
 		-values => ["Auto", "Recall", "OK", "Autocomplete", "Nothing"]);
 
 	return $cy;
@@ -196,29 +209,73 @@ sub inventory_add_autocomplete {
 	my $autocomplete_height = $scrh - $cy - 5;
 	my $autocomplete_list = $ercl_win->add("autocomplete_list", "Listbox",
 			-radio => 1, values => [], -selected => 0,
-			-y => $cy + 5, -x => 18, -width => $scrw - 18 - 16,
+			-y => $cy + 5, -x => $padding,
+			-width => $scrw - $padding - 16,
 			-height => $autocomplete_height);
+	# last: keep track of which field last did some changes to the
+	#       autocomplete list. We identify this by the fields name, space
+	#       and then the current query text.
+	my $last = "";
 	for my $key (@kinputs) {
 		next unless defined($inputs{$key}->{autocomplete});
 		my $field = $inputs{$key}->{text};
 		$field->onChange(sub {
+			my $val = $field->get();
+			my $curq = $key." ".$val;
+			return if($curq eq $last);
 			# cannot use prepared statement here because
 			# it will interpret key as string rather than
 			# table name...
 			my $stmt = $dbh->prepare(
 				"SELECT DISTINCT $key FROM inventory ".
-				"WHERE $key LIKE ? ".
-				"ORDER BY $key ASC LIMIT ?"
+				"WHERE $key LIKE ? ORDER BY $key ASC LIMIT ?"
 			);
-			$stmt->execute($field->get()."%", $autocomplete_height);
+			$stmt->execute($val."%", $autocomplete_height);
 			my $results = [];
 			while((my @row = $stmt->fetchrow_array) != 0) {
 				push @{$results}, $row[0];
 			}
 			$autocomplete_list->values($results);
+			$autocomplete_list->process_bindings("1");
 			$autocomplete_list->draw();
+			$last = $curq;
+		});
+		$field->set_binding(sub {
+			# up (go upwards, select)
+			$autocomplete_list->process_bindings("k");
+			$autocomplete_list->process_bindings("1");
+		}, Curses::UI::TextEditor::KEY_UP());
+		$field->set_binding(sub {
+			# down (go downwards, select)
+			$autocomplete_list->process_bindings("j");
+			$autocomplete_list->process_bindings("1");
+		}, Curses::UI::TextEditor::KEY_DOWN());
+		inventory_add_enter_handler($key, sub {
+			$field->text($autocomplete_list->get_active_value());
 		});
 	}
+}
+
+# $_[0]: key
+# $_[1]: autocomplete procedure [may be undef]
+sub inventory_add_enter_handler {
+	my ($key, $autocomplete) = @_;
+	$inputs{$key}->{text}->set_binding(sub {
+		my $eo = $enter_option->get();
+		if($eo eq "Auto") {
+			if($key eq "id_string") {
+				inventory_action_recall();
+			} elsif(defined $autocomplete) {
+				$autocomplete->();
+			}
+		} elsif($eo eq "OK") {
+			inventory_action_ok();
+		} elsif($eo eq "Recall") {
+			inventory_action_recall();
+		} elsif($eo eq "Autocomplete" and defined($autocomplete)) {
+			$autocomplete->();
+		}
+	}, Curses::UI::TextEditor::KEY_ENTER());
 }
 
 # $_[0] internal ID to RCL
@@ -256,7 +313,7 @@ sub inventory_display_editrcl {
 	$ercl_win->focus;
 }
 
-# TODO z BARCODE SCANNER INTEGRATION: THIS IS NOT IMMEDIATE (MAYBE DUE TO BUFFERING?) AND IF FOLLOWED BY ENTER CAN HAVE SOME STRANGE RESULTS -- NEED TO CHECK THIS WHITH THE BARCODE SCANNER BUT MAYBE WE NEED SOME SPECIAL PROVISIONS TO (1) HANDLE DATA IMMEDIATELY AND (2) DELETE TRAILING ENTERS -- a solution to 2 only might be sufficient for scanner integration...
+# TODO CSTAT BARCODE SCANNER INTEGRATION: THIS IS NOT IMMEDIATE (MAYBE DUE TO BUFFERING?) AND IF FOLLOWED BY ENTER CAN HAVE SOME STRANGE RESULTS -- NEED TO CHECK THIS WHITH THE BARCODE SCANNER BUT MAYBE WE NEED SOME SPECIAL PROVISIONS TO (1) HANDLE DATA IMMEDIATELY AND (2) DELETE TRAILING ENTERS -- a solution to 2 only might be sufficient for scanner integration...
 sub inventory_temporary_default_binding_escape {
 	my ($_binding, $key, @_extra) = @_; # Widget.pm~977
 	$is_in_normal_mode = 0;
@@ -430,68 +487,47 @@ sub inventory_add_table_to_list {
 	return [$tbl_obj->table];
 }
 
-# TODO z CODES TBD
 sub inventory_draw_codes {
 	my $ercl_win = shift;
-	inventory_draw_code($ercl_win, "   Reset (F9)", 8, 0, 0, [
-		"█▀█▀█▀█▀█▀█▀█▀██",
-		"█ ▀ ██▃█▃▀▀██▀▃█",
-		"█  ▀ ▃▃▀█▃▃  ▀▃█",
-		"█  █▃██ ▀█ ██ ▃█",
-		"█   ▀▃▀▃ ▃▀▀ ▃▃█",
-		"█  ▀▃▃█▃█  ▀  ▃█",
-		"█ █▀  █▃▃▀█▀▀█▃█",
-		"█▃▃▃▃▃▃▃▃▃▃▃▃▃▃█"
-	]);
-	inventory_draw_code($ercl_win, "  Recall (F7)", 8, $scrw - 16, 0, [
-		"█▀█▀█▀█▀█▀█▀█▀██",
-		"█ ▀ ██▃█▃▀▀██▀▃█",
-		"█  ▀ ▃▃▀█▃▃  ▀▃█",
-		"█  █▃██ ▀█ ██ ▃█",
-		"█   ▀▃▀▃ ▃▀▀ ▃▃█",
-		"█  ▀▃▃█▃█  ▀  ▃█",
-		"█ █▀  █▃▃▀█▀▀█▃█",
-		"█▃▃▃▃▃▃▃▃▃▃▃▃▃▃█"
-	]);
-	inventory_draw_code($ercl_win, "  Cancel (F10)", $scrh - 9, 0,
-								$scrh - 8, [
-		"█▀█▀█▀█▀█▀█▀█▀██",
-		"█ ▀ ██▃█▃▀▀██▀▃█",
-		"█  ▀ ▃▃▀█▃▃  ▀▃█",
-		"█  █▃██ ▀█ ██ ▃█",
-		"█   ▀▃▀▃ ▃▀▀ ▃▃█",
-		"█  ▀▃▃█▃█  ▀  ▃█",
-		"█ █▀  █▃▃▀█▀▀█▃█",
-		"█▃▃▃▃▃▃▃▃▃▃▃▃▃▃█"
-	]);
-	inventory_draw_code($ercl_win, "    OK (F4)", $scrh - 9, $scrw - 16,
-								$scrh - 8, [
-		"█▀█▀█▀█▀█▀█▀█▀██",
-		"█ ▀ ██▃█▃▀▀██▀▃█",
-		"█  ▀ ▃▃▀█▃▃  ▀▃█",
-		"█  █▃██ ▀█ ██ ▃█",
-		"█   ▀▃▀▃ ▃▀▀ ▃▃█",
-		"█  ▀▃▃█▃█  ▀  ▃█",
-		"█ █▀  █▃▃▀█▀▀█▃█",
-		"█▃▃▃▃▃▃▃▃▃▃▃▃▃▃█"
-	]);
-}
+	my @codes = (
+		# label 0         y 1        x 2         ycode 3    value 4
+		[" Reset (F9)",   6,         0,          0,         "\033r"],
+		[" Recall (F7)",  6,         $scrw - 12, 0,         "\033d"],
+		["Cancel (F10)",  $scrh - 7, 0,          $scrh - 6, "\033c"],
+		["   OK (F4)",    $scrh - 7, $scrw - 12, $scrh - 6, "\033o"]
+	);
 
-# $_[0] window
-# $_[1] label
-# $_[2] y
-# $_[3] x
-# $_[4] y0 (for code)
-# $_[5] code (reference)
-sub inventory_draw_code {
-	my ($ercl_win, $label, $y, $x, $y0code, $code) = @_;
-	$ercl_win->add("lb_gen_${y}_${x}", "Label", -text => $label,
-							-y => $y, -x => $x);
-	$y = $y0code;
-	for my $line (@{$code}) {
-		$ercl_win->add("lb_gen2_${y}_${y0code}_$x", "Label",
-					-text => $line, -y => $y, -x => $x);
-		$y++;
+	my @half_codes = (" ", "▗", "▖", "▃", "▝", "▐", "▞", "▟", "▘", "▚", "▌",
+						"▙", "▀", "▜", "▛", "█");
+	for my $code (@codes) {
+		$ercl_win->add("lb_gen_$code->[1]_$code->[2]", "Label",
+					-text => $code->[0],
+					-y => $code->[1], -x => $code->[2]);
+		my $y = $code->[3];
+		my $data = Barcode::DataMatrix->new->barcode($code->[4]);
+		my $width = @{@{$data}[0]} * 2 + 4;
+		my @drawd = ([(0) x $width]);
+		for my $row (@$data) {
+			push @drawd, [0, 0, (map { ($_, $_) } @$row), 0, 0];
+		}
+		push @drawd, [(0) x $width];
+		for(my $i = 0; $i < @drawd; $i += 2) {
+			my $line = "";
+			for(my $j = 0; $j < $width; $j += 2) {
+				my $idx =
+					($drawd[$i    ]->[$j    ] << 3) |
+					($drawd[$i    ]->[$j + 1] << 2) |
+					($drawd[$i + 1]->[$j    ] << 1) |
+					($drawd[$i + 1]->[$j + 1]);
+				# invert for black font on white background
+				$idx = ~$idx;
+				$line .= $half_codes[$idx];
+			}
+			$ercl_win->add("lb_gen2_${y}_$code->[3]_$code->[2]",
+					"Label", -text => $line, -y => $y,
+					-x => $code->[2]);
+			$y++;
+		}
 	}
 }
 
