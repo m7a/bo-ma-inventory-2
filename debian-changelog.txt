@@ -1,3 +1,9 @@
+mdvl-ma-inventory-2 (1.0.4) stable; urgency=medium
+
+  * Add ma_inventory_export_to_pdf to deb package.
+
+ -- Linux-Fan, Ma_Sys.ma <Ma_Sys.ma@web.de>  Sun, 08 Mar 2020 12:23:16 +0100
+
 mdvl-ma-inventory-2 (1.0.3) stable; urgency=medium
 
   * Fix installation path for library.

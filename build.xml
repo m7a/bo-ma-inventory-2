@@ -24,6 +24,7 @@ barcodes.tex /usr/share/mdvl-ma-inventory-2
 masysmaicon_print_sw.pdf /usr/share/mdvl-ma-inventory-2
 ma_inventory_init/ma_inventory_init /usr/bin
 ma_inventory /usr/bin
+ma_inventory_export_to_pdf /usr/bin
 ma_inventory_barcodegensvg/ma-inventory-2-barcodegensvg.jar /usr/share/java
 </property>
 
