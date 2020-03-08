@@ -92,7 +92,7 @@ License: MIT
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
 
-Files: debian/* ma_inventory_barcodegensvg/* ma_inventory_init/* xdev/lib/* xdev/ma/* xdev/notes/* xdev/ma_inventory.jar xdev/export_to_pdf.sh xdev/Makefile masysmaicon_print_sw.pdf ma_inventory.pl barcodes.tex build.xml ma_inventory ma_inventory_export_to_pdf
+Files: debian/* ma_inventory_barcodegensvg/* ma_inventory_init/* xdev/lib/* xdev/ma/* xdev/notes/* ma_inventory_att/* xdev/ma_inventory.jar xdev/export_to_pdf.sh xdev/Makefile masysmaicon_print_sw.pdf ma_inventory.pl barcodes.tex build.xml ma_inventory ma_inventory_export_to_pdf
 Copyright: Copyright (c) 2020 Ma_Sys.ma <Ma_Sys.ma@web.de>
 License: GPL-3+
 
