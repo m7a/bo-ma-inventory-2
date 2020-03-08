@@ -1,0 +1,36 @@
+Symbol.java:
+		w = getModuleWidth(c - '0') * moduleWidth;
+		System.out.print((int)w + ",");
+
+     b w b w b w b w b w b w b w b w b w b w b w b w b w b w b w b
+aa: >2,1,1,2,1,4,1,2,1,1,2,4,1,2,1,1,2,4,1,1,1,3,4,1,2,3,3,1,1,1,2,<
+
+Anfangs- und Endmarkierung `█████`
+
+Zahlen 1--4
+
+█   w8  b0 <- b0
+▉   w7  b1
+▊   w6  b2 <- b1
+▋   w5  b3
+▌   w4  b4 <- b2
+▍   w3  b5
+▎   w2  b6
+▏   w1  b7
+    w0  b8 <- b4
+
+Man hat immer wb mit n:n. Minimal 1:4, maximal 4:1 wie bildet man das
+ab? Einfache Lösung erstmal nur ganze Blöcke.
+
+printf "█████"
+blk=1
+for i in 2 1 1 2 1 4 1 2 1 1 2 4 1 2 1 1 2 4 1 1 1 3 4 1 2 3 3 1 1 1 2; do
+	if [ "$blk" = 1 ]; then
+		printf " "
+		blk=0
+	else
+		printf "█"
+		blk=1
+	fi
+done
+printf "█████\n"

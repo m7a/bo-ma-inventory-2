@@ -1,0 +1,4 @@
+Compiling and running the Ma_Sys.ma Inventory v1 needs the following libraries:
+h2.jar           -- H2 database
+okapibarcode.jar -- Okapi Library
+postgresql.jar   -- PostgreSQL database driver

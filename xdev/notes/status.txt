@@ -1,0 +1,22 @@
+USER STORIES
+
+ * permit multiple inventory dates... -> CSTAT ATTACH GUI & WRITE BACKEND
+   -> schema changes required -> prepare csv import then change schema
+   (migrate existing inventory)
+
+	next to establish a list of import facilities just like for exports.
+	also implement importing then
+
+ * permit hiding some columns
+ * documentation
+ * printing logo customization etc. should be possible
+ * settings could be more user-friendly
+
+DEFECTS
+
+ * remove unused source files, move model-only parts to `m` again.
+ * null pointer exception upon scanning while suggestions open /
+   also a problem wrt. auto-complete which causes multiple suggestion boxes to
+   appear... -> TEST
+ * autovervollständigung löst bei disambiguate-enter aus. -> Kann esc vorher
+   das lösen? -> TEST

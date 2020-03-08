@@ -1,0 +1,22 @@
+Hello,
+
+I have just found this autocomplete field yesterday and it is exactly what I need for my application. Thank you very much for creating this.
+
+As I embedded it into the project, I found a few things did not work the way I expected:
+
+ 1. Upon compiling, it gave a lot of warnings with `-Xlint:unchecked`
+    that there were unchecked conversions.
+ 2. Whenever I started typing and some suggestions were shown,
+    deleting the existing text via a few strokes on Backspace and then
+    attempting to write something which would also be a valid completion,
+    the box kept autocompleting with the suggestion from before which even
+    went as far as not permitting me to delete the existing text via backspace
+    at all.
+ 3. After finding out #2 I often desperately attempted to close the suggestion
+    box with escape... just to find out that that did nothing.
+ 4. Also, I stumbled over the requirement for a separate CSS file.
+
+Now I have tried to fix all these errors and thought you might want to at least apply some to the version in Git as well? If you are interested, feel free to apply the patch attached.
+
+Yours Sincerely
+Linux-Fan, Ma_Sys.ma

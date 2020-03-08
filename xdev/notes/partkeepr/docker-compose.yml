@@ -1,0 +1,23 @@
+version: "3"
+services:
+  partkeepr:
+    image: masysmalocal/partkeepr
+    build:
+      context: .
+      args:
+        - MA_PARTKEEPR_DL_URL=http://192.168.1.16/sites/prod/shrdir/partkeepr-1.4.0.tbz2
+    ports:
+      - "127.0.0.1:9017:80"
+    volumes:
+      - /fs/e01/nobak/test-partkeepr/data:/var/www/html/data
+    depends_on:
+      - database
+  database:
+    image: mariadb:10.0
+    environment:
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+      - MYSQL_DATABASE=partkeepr
+      - MYSQL_USER=partkeepr
+      - MYSQL_PASSWORD=wefi32842340owerpweiojsdfiops
+    volumes:
+      - /fs/e01/nobak/test-partkeepr/mysql:/var/lib/mysql

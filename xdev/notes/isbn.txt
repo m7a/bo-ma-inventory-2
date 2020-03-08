@@ -1,0 +1,61 @@
+d-nb.info/988787555/about/marcxml
+https://portal.dnb.de/opac.htm?method=showFullRecord&currentResultId=9783505047732%26any&currentPosition=1
+https://portal.dnb.de/opac.htm?method=showFullRecord&currentResultId=9783883221922%26any&currentPosition=1
+
+http://www.dnb.de/EN/Service/DigitaleDienste/LinkedData/linkeddata_node.html
+
+-> DNBTitel.rdf.gz
+
+CHCK 4019393954582
+
+requires libopenjfx-java
+
+java -Dprism.order=sw JavaFXSkel
+
+
+Data: EditDialogFields
+Upon Enter
+	-> for each plugin
+		-> tryAutofill
+	-> validate
+	-> store
+
+alternatively (CSEL):
+ * Maintain list of ``suggester''-plugins
+ * Upon changing a field (field edit + tab [or enter])
+   Use like a ``static table row''?
+ * Invoce suggester
+ * If yields exactly one non-conflicting (only writes to empty fields)
+ * Then just fill in / [if enter was pressed validate&store]
+ * If yields more or conflicting -> present disambiguation screen
+ * If error saving. Hold and display error
+
+/usr/lib/jvm/java-8-openjdk-amd64/bin/java ma.inventory.plugin.isbndb.ImportISBNDB /home/linux-fan/wd/dnb | pv | psql -q ma_inventory
+
+REQ
+ * Autoscroll
+ * Default error handler
+OPT
+ * DBL Click Edit
+
+IDs
+
+1 0400X XXXXX XXXXX
+- ----- ----- -----
+
+a) CODE128
+   1040000000000000 -> 1040000000000000
+b) CODE128 GS1 / [91] XXXX XXXX
+   [91]00000000 -> ]C19100000000
+c) PDF417 (16 words error correcting capacity)
+   1040000000000000 -> 1040000000000000
+c) Interleaved 2 out of 5
+   1040000000000000 -> 1040000000000000
+
+DIM
+ * c = 20.5mm (t)
+ * a = 8mm (l)
+ * b = 8mm (r)
+ * d = 22.5mm (b)
+ * w = 48.25mm
+ * h = 25mm
