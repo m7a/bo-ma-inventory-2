@@ -1,3 +1,9 @@
+mdvl-ma-inventory-2 (1.0.5) stable; urgency=medium
+
+  * Fix target path for PDF export.
+
+ -- Linux-Fan, Ma_Sys.ma <Ma_Sys.ma@web.de>  Sun, 08 Mar 2020 12:26:47 +0100
+
 mdvl-ma-inventory-2 (1.0.4) stable; urgency=medium
 
   * Add ma_inventory_export_to_pdf to deb package.

@@ -20,6 +20,7 @@ java -cp /usr/share/java/okapibarcode-0.2.3.jar:/usr/share/java/ma-inventory-2-b
 
 cp /usr/share/mdvl-ma-inventory-2/masysmaicon_print_sw.pdf "$target"
 cp /usr/share/mdvl-ma-inventory-2/barcodes.tex             "$target"
+bakwd="$(pwd)"
 cd "$target"
 find . -maxdepth 1 -type f -name 'bc_*.svg' | {
 	pids=
@@ -29,7 +30,7 @@ find . -maxdepth 1 -type f -name 'bc_*.svg' | {
 	done
 	wait $pids || true
 }
-pdflatex barcodes
-pdflatex barcodes
-
-mv barcodes.pdf "$3"
+pdflatex barcodes >  log.txt 2>&1
+pdflatex barcodes >> log.txt 2>&1
+cd "$bakwd"
+mv "$target/barcodes.pdf" "$3"
