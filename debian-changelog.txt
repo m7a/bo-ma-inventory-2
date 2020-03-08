@@ -1,3 +1,9 @@
+mdvl-ma-inventory-2 (1.0.1) stable; urgency=medium
+
+  * Rebuild package.
+
+ -- Linux-Fan, Ma_Sys.ma <Ma_Sys.ma@web.de>  Sun, 08 Mar 2020 12:13:27 +0100
+
 mdvl-ma-inventory-2 (1.0.0) stable; urgency=medium
 
   * Package created with MDPC 2
