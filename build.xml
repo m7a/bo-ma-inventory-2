@@ -2,10 +2,11 @@
 <project default="build">
 
 <!-- APPLICATION METADATA -->
-<property name="mdpc.name"    value="mdvl-ma-inventory-2"/>
-<property name="mdpc.section" value="database"/>
-<property name="mdpc.descrs"  value="Ma_Sys.ma Inventory 2 -- Barcode-enabled single-user inventory script"/>
-<property name="mdpc.arch"    value="all"/>
+<property name="mdpc.name"       value="mdvl-ma-inventory-2"/>
+<property name="mdpc.section"    value="database"/>
+<property name="mdpc.descrs"     value="Ma_Sys.ma Inventory 2 -- Barcode-enabled single-user inventory script"/>
+<property name="mdpc.arch"       value="all"/>
+<property name="mdpc.recommends" value="mdvl-okapibarcode"/>
 <property name="mdpc.depends">libdbd-sqlite3-perl, libtext-table-perl,
 	libbarcode-datamatrix-perl, perl, libcurses-perl,
 	libterm-readkey-perl</property>

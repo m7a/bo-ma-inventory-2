@@ -1,3 +1,9 @@
+mdvl-ma-inventory-2 (1.0.2) stable; urgency=medium
+
+  * Add missing dependency on mdvl-okapibarcode.
+
+ -- Linux-Fan, Ma_Sys.ma <Ma_Sys.ma@web.de>  Sun, 08 Mar 2020 12:15:57 +0100
+
 mdvl-ma-inventory-2 (1.0.1) stable; urgency=medium
 
   * Rebuild package.
