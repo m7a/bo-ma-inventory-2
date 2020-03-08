@@ -1,2 +1,2 @@
 #!/bin/sh -e
-exec /usr/bin/perl /usr/share/mdvl-ma-inventory/ma_inventory.pl "$@"
+exec /usr/bin/perl /usr/share/mdvl-ma-inventory-2/ma_inventory.pl "$@"

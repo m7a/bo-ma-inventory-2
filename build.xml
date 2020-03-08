@@ -18,7 +18,7 @@
 </property>
 
 <property name="mdpc.file.install">
-Curses /usr/share/mdvl-ma-inventory-2/Curses
+Curses /usr/share/mdvl-ma-inventory-2
 ma_inventory.pl /usr/share/mdvl-ma-inventory-2
 barcodes.tex /usr/share/mdvl-ma-inventory-2
 masysmaicon_print_sw.pdf /usr/share/mdvl-ma-inventory-2
