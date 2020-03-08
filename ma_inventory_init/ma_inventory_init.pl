@@ -97,7 +97,7 @@ if($#ARGV eq 1) { # parameter CSVFILE is present
 		$linenumber++;
 	}
 	close($fh);
-	$dbh->commit();
 }
 
-$dbh->disconnect;
+$dbh->commit();
+$dbh->disconnect();

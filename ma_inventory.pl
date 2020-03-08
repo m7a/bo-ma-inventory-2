@@ -85,7 +85,7 @@ sub inventory_init {
 	}
 	$dbh = DBI->connect("dbi:SQLite:dbname=$ARGV[0]", "", "",
 		{ sqlite_unicode => 1, AutoCommit => 1, RaiseError => 1 });
-	$curses = Curses::UI->new(-clear_on_exit => 1);
+	$curses = Curses::UI->new(-clear_on_exit => 1, -mouse_support => 0);
 	$scrh = $curses->height;
 	$scrw = $curses->width;
 }
@@ -611,7 +611,7 @@ sub inventory_generate_ids {
 		"WHERE length(id_string) = 16 ORDER BY id_string DESC LIMIT 1");
 	$stmt->execute();
 	my @result = $stmt->fetchrow_array();
-	my $current_max_id = $result[0];
+	my $current_max_id = $#result < 0? 1041000000000000: $result[0];
 
 	my $dialog = $tbl_win->add("dialog_generate", "Dialog::Basic",
 		-message => "Generate 128 IDs from $current_max_id exclusive?",
@@ -619,7 +619,6 @@ sub inventory_generate_ids {
 	$dialog->modalfocus;
 	my $answer = $dialog->get();
 	$tbl_win->delete("dialog_generate");
-	$curses->leave_curses();
 	if($answer) {
 		$stmt = $dbh->prepare("INSERT INTO inventory ".
 				"(id_string, quantity) VALUES ".
