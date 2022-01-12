@@ -42,7 +42,7 @@ Terminal user Interface (TUI) and Barcode Scanner support
 Structure by Autocomplete
 :   Most inventory software supports keeping the individual items in categories.
     The Ma_Sys.ma implementation does this as well but does not require the
-    categories to be predefined. Instread, it suggests existing categories for
+    categories to be predefined. Instead, it suggests existing categories for
     autocompletion as a means to re-use previously entered categories.
 
 The mailing list discussion which led to the creation of the software presented
