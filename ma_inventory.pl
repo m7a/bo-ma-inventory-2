@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# Ma_Sys.ma Inventory 2.0.0, Copyright (c) 2020 Ma_Sys.ma.
+# Ma_Sys.ma Inventory 2.0.1, Copyright (c) 2020, 2022 Ma_Sys.ma.
 # For further info send an e-mail to Ma_Sys.ma@web.de.
 
 use utf8;
@@ -13,10 +13,10 @@ require Barcode::DataMatrix; # libbarcode-datamatrix-perl
 
 use Try::Tiny;
 use File::Basename;
-use Data::Dumper 'Dumper'; # debug only
+use Data::Dumper 'Dumper';   # debug only
 
-use lib dirname(__FILE__); # load locally changed modules below...
-require Curses::UI; # libcurses-ui-perl
+use lib dirname(__FILE__);   # load locally changed modules below...
+require Curses::UI;          # libcurses-ui-perl
 
 # -- constant --
 my @kinputs = qw(id_string quantity class thing location t0 origin importance comments);
@@ -25,6 +25,8 @@ my $table_ui_fields = "id_internal, id_string, quantity, class, thing, ".
 my $padding     = 14;           # checkbox offset
 my $offset      = $padding + 5; # label offset
 my $field_start = $offset + 11; # field offset
+
+use constant ID_LENGTH => 16;
 
 ################################################################################
 ## SHARED APPLICATION STATE ####################################################
@@ -319,6 +321,14 @@ sub inventory_action_recall {
 		$stmt->execute(map { $inputs{$_}->{text}->get()."%" }
 				qw(class thing location origin importance));
 	} else {
+		# expand .. syntax
+		if($id =~ /^[0-9]+\.\.[0-9]+$/) {
+			my $idx    = index($id, "..");
+			my $prefix = substr($id, 0, $idx);
+			my $suffix = substr($id, $idx + 2);
+			$id = $prefix.("0" x (ID_LENGTH - length($prefix) -
+						length($suffix))).$suffix;
+		}
 		$stmt = $dbh->prepare("SELECT id_internal FROM inventory ".
 							"WHERE id_string = ?");
 		$stmt->execute($id);
@@ -503,9 +513,9 @@ sub inventory_update_displayed_table {
 sub inventory_add_table_to_list {
 	my ($all_results, $internal_ids) = @_;
 	# -5 for five column separator spaces
-	my $wavail = $scrw - 16 - 3 - 9 - 3 - 5;
-	my @colmaxlen = (16, 3, int($wavail * 1 / 3),
-						int($wavail * 2 / 3), 9, 3);
+	my $wavail = $scrw - ID_LENGTH - 3 - 11 - 3 - 5;
+	my @colmaxlen = (ID_LENGTH, 3, int($wavail * 1 / 3),
+						int($wavail * 2 / 3), 11, 3);
 	my $tbl_obj = Text::Table->new("ID", "Qty", "Class", "Thing", "Loc",
 									"Imp");
 	@{$internal_ids} = (undef);
@@ -608,7 +618,8 @@ sub inventory_generate_ids {
 	my $num_to_gen = 128;
 
 	my $stmt = $dbh->prepare("SELECT id_string FROM inventory ".
-		"WHERE length(id_string) = 16 ORDER BY id_string DESC LIMIT 1");
+				"WHERE length(id_string) = ".ID_LENGTH.
+				" ORDER BY id_string DESC LIMIT 1");
 	$stmt->execute();
 	my @result = $stmt->fetchrow_array();
 	my $current_max_id = $#result < 0? 1041000000000000: $result[0];

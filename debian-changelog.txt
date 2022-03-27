@@ -1,3 +1,10 @@
+mdvl-ma-inventory-2 (1.0.6) stable; urgency=medium
+
+  * Allow expansion of ID shortcut syntax (A..B)
+  * Make location column wider.
+
+ -- Linux-Fan, Ma_Sys.ma <Ma_Sys.ma@web.de>  Sun, 27 Mar 2022 14:44:33 +0200
+
 mdvl-ma-inventory-2 (1.0.5) stable; urgency=medium
 
   * Fix target path for PDF export.
