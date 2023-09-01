@@ -8,7 +8,7 @@ author: ["Linux-Fan, Ma_Sys.ma (Ma_Sys.ma@web.de)"]
 keywords: ["inventory", "sqlite", "barcode", "perl", "java", "tui", "curses"]
 x-masysma-version: 2.0.0
 x-masysma-repository: https://www.github.com/m7a/bo-ma-inventory-2
-x-masysma-website: https://masysma.lima-city.de/32/ma_inventory.xhtml
+x-masysma-website: https://masysma.net/32/ma_inventory.xhtml
 x-masysma-owned: 1
 x-masysma-copyright: |
   Copyright (c) 2020 Ma_Sys.ma.
